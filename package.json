@@ -13,7 +13,8 @@
     "seed-mock": "tsx scripts/seed-mock.ts",
     "test": "vitest run tests/unit",
     "typecheck": "tsc --noEmit",
-    "diagnose:supabase": "tsx scripts/diagnose-supabase.ts"
+    "diagnose:supabase": "tsx scripts/diagnose-supabase.ts",
+    "refresh:filters": "tsx scripts/refresh-filter-cache.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

@@ -127,15 +127,33 @@ async function diagnose() {
     errorsCount++;
   }
 
-  // 7. Validar RPC get_filter_options()
-  console.log('\n--- 7. Validando RPC get_filter_options ---');
+  // 7. Validar Tabela de Cache de Filtros
+  console.log('\n--- 7. Validando Tabela public.cetesb_filter_options_cache ---');
+  try {
+    const { data: cacheRecords, error: cacheError } = await supabase!
+      .from('cetesb_filter_options_cache')
+      .select('report_type, updated_at');
+    
+    if (cacheError) {
+      console.log(`⚠️ FALHA ao consultar cetesb_filter_options_cache (a migration 012 foi executada?): ${cacheError.message}`);
+      errorsCount++;
+    } else {
+      console.log(`✅ OK: public.cetesb_filter_options_cache existe. Registros no cache:`, cacheRecords);
+    }
+  } catch (err: any) {
+    console.log(`❌ FALHA inesperada na tabela de cache: ${err.message || err}`);
+    errorsCount++;
+  }
+
+  // 8. Validar RPC get_filter_options() via Cache
+  console.log('\n--- 8. Validando RPC get_filter_options ---');
   try {
     const { data: atData, error: atError } = await supabase!.rpc('get_filter_options', { report_type: 'ATENDIMENTO_OPERACAO' });
     if (atError) {
       console.log(`❌ FALHA na RPC get_filter_options(ATENDIMENTO_OPERACAO): ${atError.message}`);
       errorsCount++;
     } else {
-      console.log(`✅ OK: get_filter_options(ATENDIMENTO_OPERACAO) respondeu. Campanhas count: ${atData?.campanhas?.length || 0}`);
+      console.log(`✅ OK: get_filter_options(ATENDIMENTO_OPERACAO) respondeu. Campanhas: ${atData?.campanhas?.length || 0}, Filas: ${atData?.filas?.length || 0}`);
     }
 
     const { data: uraData, error: uraError } = await supabase!.rpc('get_filter_options', { report_type: 'URA' });
@@ -143,7 +161,7 @@ async function diagnose() {
       console.log(`❌ FALHA na RPC get_filter_options(URA): ${uraError.message}`);
       errorsCount++;
     } else {
-      console.log(`✅ OK: get_filter_options(URA) respondeu. Campanhas count: ${uraData?.campanhas?.length || 0}`);
+      console.log(`✅ OK: get_filter_options(URA) respondeu. Campanhas: ${uraData?.campanhas?.length || 0}, Filas: ${uraData?.filas?.length || 0}`);
     }
   } catch (err: any) {
     console.log(`❌ FALHA inesperada na RPC get_filter_options: ${err.message || err}`);

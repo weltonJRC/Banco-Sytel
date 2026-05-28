@@ -7,7 +7,7 @@ const EXPORT_MAX_ROWS = parseInt(process.env.NEXT_PUBLIC_EXPORT_MAX_ROWS || '100
 
 /**
  * Consulta eventos filtrados e paginados (Atendimento ou URA)
- * Apenas conecta ao Supabase real. Lança erros explícitos em caso de falha.
+ * Utiliza nomes de colunas puramente técnicos em minúsculas para máxima estabilidade e performance.
  */
 export async function fetchEvents(filters: EventFilter): Promise<PaginatedResult<any>> {
   if (!isSupabaseConfigured()) {
@@ -21,31 +21,31 @@ export async function fetchEvents(filters: EventFilter): Promise<PaginatedResult
       .from(viewName)
       .select('*', { count: 'exact' });
 
-    // Aplicar filtros dinâmicos usando as novas colunas mapeadas na view
+    // Aplicar filtros dinâmicos usando as colunas técnicas
     if (filters.startDate) {
-      query = query.gte('Sessão iniciada - Evento', filters.startDate);
+      query = query.gte('sessao_iniciada', filters.startDate);
     }
     if (filters.endDate) {
       // Adiciona fim do dia
       const endLimit = `${filters.endDate}T23:59:59.999Z`;
-      query = query.lte('Sessão iniciada - Evento', endLimit);
+      query = query.lte('sessao_iniciada', endLimit);
     }
     if (filters.campanha) {
-      query = query.eq('Campanha', filters.campanha);
+      query = query.eq('campanha', filters.campanha);
     }
     if (filters.fila) {
-      query = query.eq('Fila', filters.fila);
+      query = query.eq('fila', filters.fila);
     }
     if (filters.usuario && !isUra) {
       const safeUsuario = sanitizeIlikeInput(filters.usuario);
-      query = query.ilike('Usuário', `%${safeUsuario}%`);
+      query = query.ilike('usuario', `%${safeUsuario}%`);
     }
     if (filters.resultado) {
       const safeResultado = sanitizeIlikeInput(filters.resultado);
       if (isUra) {
-        query = query.ilike('Resultado', `%${safeResultado}%`);
+        query = query.ilike('resultado_nome', `%${safeResultado}%`);
       } else {
-        query = query.ilike('Descrição do resultado do usuário', `%${safeResultado}%`);
+        query = query.ilike('descricao_resultado', `%${safeResultado}%`);
       }
     }
 
@@ -57,7 +57,7 @@ export async function fetchEvents(filters: EventFilter): Promise<PaginatedResult
     const endIdx = startIdx + pageSize - 1;
 
     query = query
-      .order('Sessão iniciada - Evento', { ascending: false })
+      .order('sessao_iniciada', { ascending: false })
       .range(startIdx, endIdx);
 
     const { data, count, error } = await query;
@@ -67,34 +67,34 @@ export async function fetchEvents(filters: EventFilter): Promise<PaginatedResult
     const total = count || 0;
     const totalPages = Math.ceil(total / pageSize);
 
-    // Normaliza a resposta mapeando as chaves em Português de volta para o padrão lowercase do front
+    // Normaliza a resposta mapeando as chaves
     const normalizedData = (data || []).map((r: any) => {
       if (isUra) {
         return {
           id: Math.random(), // gera ID visual dinâmico
-          campanha: r['Campanha'],
-          fila: r['Fila'],
-          numero_telefone: r['Número de telefone'],
-          sessao_iniciada: r['Sessão iniciada - Evento'],
-          duracao_fila_segundos: r['Duração da fila - Total'],
-          duracao_fala_segundos: r['Duração da fala - Total'],
-          resultado_name: r['Resultado'],
-          descricao_resultado: r['Descrição do resultado do usuário'],
+          campanha: r.campanha,
+          fila: r.fila,
+          numero_telefone: r.numero_telefone,
+          sessao_iniciada: r.sessao_iniciada,
+          duracao_fila_segundos: r.duracao_fila_segundos,
+          duracao_fala_segundos: r.duracao_fala_segundos,
+          resultado_name: r.resultado_nome,
+          descricao_resultado: r.descricao_resultado,
           fonte_oficial: 'CETESB 2025 - URA/Atendimento', // fallback visual legível
           status_validacao: 'VALIDADO'
         };
       } else {
         return {
           id: Math.random(),
-          campanha: r['Campanha'],
-          fila: r['Fila'],
-          usuario: r['Usuário'],
-          numero_telefone: r['Número de telefone'],
-          sessao_iniciada: r['Sessão iniciada - Evento'],
-          duracao_fila_segundos: r['Duração da fila - Total'],
-          duracao_fala_segundos: r['Duração da fala - Total'],
-          descricao_resultado: r['Descrição do resultado do usuário'],
-          resultado_usuario: r['Resultado do usuário'],
+          campanha: r.campanha,
+          fila: r.fila,
+          usuario: r.usuario,
+          numero_telefone: r.numero_telefone,
+          sessao_iniciada: r.sessao_iniciada,
+          duracao_fila_segundos: r.duracao_fila_segundos,
+          duracao_fala_segundos: r.duracao_fala_segundos,
+          descricao_resultado: r.descricao_resultado,
+          resultado_usuario: r.resultado_usuario,
           fonte_oficial: 'CETESB 2026 - Atendimento',
           status_validacao: 'VALIDADO'
         };

@@ -38,14 +38,18 @@ interface DashboardData {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
+      setLoading(true);
+      setError(null);
       try {
         const data = await fetchDashboardStats();
         setStats(data);
       } catch (err) {
         console.error('Erro ao carregar dados do dashboard:', err);
+        setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
       } finally {
         setLoading(false);
       }
@@ -60,7 +64,7 @@ export default function DashboardPage() {
     return d.toLocaleDateString('pt-BR');
   };
 
-  if (loading || !stats) {
+  if (loading) {
     return (
       <AppLayout title="Dashboard Geral">
         <div className="animate-pulse space-y-6">
@@ -70,6 +74,22 @@ export default function DashboardPage() {
             ))}
           </div>
           <div className="h-96 bg-white border border-slate-200 rounded-lg"></div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <AppLayout title="Dashboard Geral">
+        <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-red-50 rounded-lg border border-red-200 shadow-sm space-y-4">
+          <div className="p-4 bg-red-100 text-red-500 border border-red-200 rounded-full flex items-center justify-center">
+            <Database className="w-10 h-10" />
+          </div>
+          <h2 className="text-xl font-bold text-red-800">Falha ao Inicializar Dashboard</h2>
+          <p className="text-sm text-red-600 max-w-md font-semibold font-medium">
+            {error || 'Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.'}
+          </p>
         </div>
       </AppLayout>
     );

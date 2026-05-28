@@ -33,6 +33,7 @@ export default function UraCetesbPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -57,6 +58,7 @@ export default function UraCetesbPage() {
 
   const loadData = async (activePage = page, activePageSize = pageSize) => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetchEvents({
         tipo_relatorio: 'URA',
@@ -69,6 +71,10 @@ export default function UraCetesbPage() {
       setTotalPages(res.totalPages);
     } catch (err) {
       console.error('Erro ao carregar registros de URA:', err);
+      setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
+      setData([]);
+      setTotal(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -110,6 +116,7 @@ export default function UraCetesbPage() {
     setPage(1);
 
     setLoading(true);
+    setError(null);
     fetchEvents({
       tipo_relatorio: 'URA',
       page: 1,
@@ -119,6 +126,13 @@ export default function UraCetesbPage() {
       setData(res.data);
       setTotal(res.total);
       setTotalPages(res.totalPages);
+      setLoading(false);
+    }).catch(err => {
+      console.error('Erro ao carregar registros de URA ao limpar:', err);
+      setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
+      setData([]);
+      setTotal(0);
+      setTotalPages(1);
       setLoading(false);
     });
   };
@@ -231,26 +245,38 @@ export default function UraCetesbPage() {
         />
 
         {/* Tabela de Dados Grande */}
-        <DataTable
-          headers={headers}
-          loading={loading}
-          totalRecords={total}
-        >
-          {data.map((row) => (
-            <tr key={row.id} className="hover:bg-slate-50 border-b border-slate-100 transition-colors">
-              <td className="px-4 py-3.5 font-bold text-slate-800">{row.campanha}</td>
-              <td className="px-4 py-3.5 text-slate-600 font-medium">{row.fila}</td>
-              <td className="px-4 py-3.5 font-mono text-slate-600 tracking-wider font-semibold">{row.numero_telefone}</td>
-              <td className="px-4 py-3.5 text-slate-500 font-medium">{formatDateTime(row.sessao_iniciada)}</td>
-              <td className="px-4 py-3.5 font-mono text-slate-500">{formatSeconds(row.duracao_fila_segundos)}</td>
-              <td className="px-4 py-3.5 font-mono text-slate-800 font-bold">{formatSeconds(row.duracao_fala_segundos)}</td>
-              <td className="px-4 py-3.5 font-semibold text-slate-700">{row.resultado_nome || '-'}</td>
-              <td className="px-4 py-3.5 text-slate-600 max-w-[200px] truncate" title={row.descricao_resultado}>
-                {row.descricao_resultado}
-              </td>
-            </tr>
-          ))}
-        </DataTable>
+        {error ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center bg-red-50 rounded-lg border border-red-200 shadow-sm">
+            <div className="p-4 bg-red-100 text-red-500 border border-red-200 rounded-full flex items-center justify-center">
+              <Database className="w-8 h-8" />
+            </div>
+            <h3 className="mt-4 text-base font-bold text-red-800">Erro na Consulta</h3>
+            <p className="mt-2 text-sm text-red-600 max-w-md font-semibold">
+              {error}
+            </p>
+          </div>
+        ) : (
+          <DataTable
+            headers={headers}
+            loading={loading}
+            totalRecords={total}
+          >
+            {data.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50 border-b border-slate-100 transition-colors">
+                <td className="px-4 py-3.5 font-bold text-slate-800">{row.campanha}</td>
+                <td className="px-4 py-3.5 text-slate-600 font-medium">{row.fila}</td>
+                <td className="px-4 py-3.5 font-mono text-slate-600 tracking-wider font-semibold">{row.numero_telefone}</td>
+                <td className="px-4 py-3.5 text-slate-500 font-medium">{formatDateTime(row.sessao_iniciada)}</td>
+                <td className="px-4 py-3.5 font-mono text-slate-500">{formatSeconds(row.duracao_fila_segundos)}</td>
+                <td className="px-4 py-3.5 font-mono text-slate-800 font-bold">{formatSeconds(row.duracao_fala_segundos)}</td>
+                <td className="px-4 py-3.5 font-semibold text-slate-700">{row.resultado_nome || '-'}</td>
+                <td className="px-4 py-3.5 text-slate-600 max-w-[200px] truncate" title={row.descricao_resultado}>
+                  {row.descricao_resultado}
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
 
         {/* Paginação */}
         <Pagination

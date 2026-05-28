@@ -48,7 +48,7 @@ export default function DashboardPage() {
         const data = await fetchDashboardStats();
         setStats(data);
       } catch (err) {
-        console.error('Erro ao carregar dados do dashboard:', err);
+        console.warn('[Dashboard Page] Falha de comunicação interna ao carregar estatísticas.');
         setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
       } finally {
         setLoading(false);

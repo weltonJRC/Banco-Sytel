@@ -12,7 +12,8 @@
     "validate:data": "tsx scripts/validate-data.ts",
     "seed-mock": "tsx scripts/seed-mock.ts",
     "test": "vitest run tests/unit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "diagnose:supabase": "tsx scripts/diagnose-supabase.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

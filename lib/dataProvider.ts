@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { sanitizeIlikeInput } from './formatters';
 import type { EventFilter, PaginatedResult, FilterOptions, DashboardData } from './types';
+import { logNormalizedError } from './supabaseErrors';
 
 // Limite máximo de registros para exportação
 const EXPORT_MAX_ROWS = parseInt(process.env.NEXT_PUBLIC_EXPORT_MAX_ROWS || '10000', 10);
@@ -109,12 +110,7 @@ export async function fetchEvents(filters: EventFilter): Promise<PaginatedResult
       totalPages
     };
   } catch (error: any) {
-    console.error('[DataProvider Error] Erro ao consultar Supabase em fetchEvents:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint
-    });
+    logNormalizedError('fetchEvents', error);
     throw error;
   }
 }
@@ -205,12 +201,7 @@ export async function fetchDashboardStats(): Promise<DashboardData> {
       monthlyCoverage
     };
   } catch (err: any) {
-    console.error('[DataProvider Error] Erro ao consultar RPCs do Dashboard:', {
-      message: err.message,
-      code: err.code,
-      details: err.details,
-      hint: err.hint
-    });
+    logNormalizedError('fetchDashboardStats', err);
     throw err;
   }
 }
@@ -231,12 +222,7 @@ export async function fetchAuditoria(): Promise<any[]> {
     if (error) throw error;
     return data || [];
   } catch (err: any) {
-    console.error('[DataProvider Error] Erro ao consultar Auditoria no Supabase:', {
-      message: err.message,
-      code: err.code,
-      details: err.details,
-      hint: err.hint
-    });
+    logNormalizedError('fetchAuditoria', err);
     throw err;
   }
 }
@@ -258,12 +244,7 @@ export async function fetchProfiles(): Promise<any[]> {
     if (error) throw error;
     return data || [];
   } catch (err: any) {
-    console.error('[DataProvider Error] Erro ao consultar Perfis no Supabase:', {
-      message: err.message,
-      code: err.code,
-      details: err.details,
-      hint: err.hint
-    });
+    logNormalizedError('fetchProfiles', err);
     throw err;
   }
 }
@@ -303,12 +284,7 @@ export async function fetchFilterOptions(tipo?: 'ATENDIMENTO_OPERACAO' | 'URA'):
       statuses: ['VALIDADO', 'PENDENTE', 'DIVERGENTE']
     };
   } catch (err: any) {
-    console.error('[DataProvider Error] Erro ao carregar opções de filtros do Supabase:', {
-      message: err.message,
-      code: err.code,
-      details: err.details,
-      hint: err.hint
-    });
+    logNormalizedError('fetchFilterOptions', err);
     throw err;
   }
 }

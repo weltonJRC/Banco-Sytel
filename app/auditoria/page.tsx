@@ -37,7 +37,7 @@ export default function AuditoriaPage() {
         const res = await fetchAuditoria();
         setData(res);
       } catch (err) {
-        console.error('Erro ao carregar auditoria:', err);
+        console.warn('[Auditoria Page] Falha de comunicação interna ao carregar auditoria.');
         setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
       } finally {
         setLoading(false);

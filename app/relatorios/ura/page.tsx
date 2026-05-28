@@ -70,7 +70,7 @@ export default function UraCetesbPage() {
       setTotal(res.total);
       setTotalPages(res.totalPages);
     } catch (err) {
-      console.error('Erro ao carregar registros de URA:', err);
+      console.warn('[URA Page] Falha de comunicação interna ao carregar registros.');
       setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
       setData([]);
       setTotal(0);
@@ -82,8 +82,12 @@ export default function UraCetesbPage() {
 
   useEffect(() => {
     async function loadOptions() {
-      const opts = await fetchFilterOptions('URA');
-      setFilterOptions(opts);
+      try {
+        const opts = await fetchFilterOptions('URA');
+        setFilterOptions(opts);
+      } catch (err) {
+        console.warn('[URA Page] Falha de comunicação interna ao carregar filtros de pesquisa.');
+      }
     }
     loadOptions();
   }, []);
@@ -128,7 +132,7 @@ export default function UraCetesbPage() {
       setTotalPages(res.totalPages);
       setLoading(false);
     }).catch(err => {
-      console.error('Erro ao carregar registros de URA ao limpar:', err);
+      console.warn('[URA Page] Falha de comunicação interna ao limpar filtros.');
       setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
       setData([]);
       setTotal(0);

@@ -74,7 +74,7 @@ export default function AtendimentosOperacaoPage() {
       setTotal(res.total);
       setTotalPages(res.totalPages);
     } catch (err) {
-      console.error('Erro ao carregar atendimentos da operação:', err);
+      console.warn('[Atendimentos Page] Falha de comunicação interna ao carregar atendimentos.');
       setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
       setData([]);
       setTotal(0);
@@ -87,8 +87,12 @@ export default function AtendimentosOperacaoPage() {
   // Carrega as opções de filtro uma única vez no mount
   useEffect(() => {
     async function loadOptions() {
-      const opts = await fetchFilterOptions('ATENDIMENTO_OPERACAO');
-      setFilterOptions(opts);
+      try {
+        const opts = await fetchFilterOptions('ATENDIMENTO_OPERACAO');
+        setFilterOptions(opts);
+      } catch (err) {
+        console.warn('[Atendimentos Page] Falha de comunicação interna ao carregar filtros de pesquisa.');
+      }
     }
     loadOptions();
   }, []);
@@ -136,7 +140,7 @@ export default function AtendimentosOperacaoPage() {
       setTotalPages(res.totalPages);
       setLoading(false);
     }).catch(err => {
-      console.error('Erro ao carregar atendimentos da operação ao limpar:', err);
+      console.warn('[Atendimentos Page] Falha de comunicação interna ao limpar filtros.');
       setError('Não foi possível carregar os dados. Tente novamente ou acione o suporte JRC.');
       setData([]);
       setTotal(0);

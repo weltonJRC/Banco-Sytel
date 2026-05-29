@@ -38,6 +38,10 @@ next-env.d.ts
 /data/raw/*.XLSX
 !/data/raw/.gitkeep
 
+# Global Excel Ignore
+*.xlsx
+*.XLSX
+
 # generated data
 /data/exports/
 /data/processed/

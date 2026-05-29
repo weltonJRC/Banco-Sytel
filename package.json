@@ -14,7 +14,9 @@
     "test": "vitest run tests/unit",
     "typecheck": "tsc --noEmit",
     "diagnose:supabase": "tsx scripts/diagnose-supabase.ts",
-    "refresh:filters": "tsx scripts/refresh-filter-cache.ts"
+    "refresh:filters": "tsx scripts/refresh-filter-cache.ts",
+    "analyze:dec-jan": "tsx scripts/analyze-dec-jan-complement.ts",
+    "import:dec-jan": "tsx scripts/import-dec-jan-complement.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

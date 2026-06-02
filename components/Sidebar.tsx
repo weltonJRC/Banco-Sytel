@@ -10,7 +10,8 @@ import {
   ShieldCheck, 
   Users, 
   LogOut,
-  Layers
+  Layers,
+  ClipboardList
 } from 'lucide-react';
 import { getCurrentUser, signOut } from '../lib/auth';
 
@@ -41,6 +42,12 @@ export default function Sidebar() {
       label: 'URA CETESB',
       path: '/relatorios/ura',
       icon: <Cpu className="w-5 h-5" />,
+      roles: ['jrc_admin', 'jrc_operacao', 'jrc_auditoria', 'cetesb_consulta', 'cetesb_gestao']
+    },
+    {
+      label: 'Qualificação Detalhada',
+      path: '/relatorios/qualificacao-detalhada',
+      icon: <ClipboardList className="w-5 h-5" />,
       roles: ['jrc_admin', 'jrc_operacao', 'jrc_auditoria', 'cetesb_consulta', 'cetesb_gestao']
     },
     {

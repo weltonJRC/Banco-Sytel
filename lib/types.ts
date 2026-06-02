@@ -148,3 +148,32 @@ export interface ValidationIssue {
   issue_type: 'MISSING_DATE' | 'MISSING_CAMPAGNA' | 'PROBABLE_DUPLICATE';
   description: string;
 }
+
+// ─── Qualificação Detalhada ──────────────────────────────────
+
+/**
+ * Linha retornada pela RPC get_qualificacao_detalhada_atendimento.
+ * Representa um grupo (campanha + qualificação) com métricas consolidadas.
+ */
+export interface QualificacaoDetalhadaRow {
+  campanha: string;
+  tipo: string;
+  qualificacao: string;
+  chamadas: number;
+  tma_soma_segundos: number;
+  tma_media_segundos: number;
+  pos_atendimento_soma_segundos: number;
+  pos_atendimento_media_segundos: number;
+  periodo_inicio: string;
+  periodo_fim: string;
+}
+
+/**
+ * Filtros da tela de Qualificação Detalhada.
+ */
+export interface QualificacaoDetalhadaFilters {
+  startDate: string;
+  endDate: string;
+  campanha: string;
+  resultado: string;
+}

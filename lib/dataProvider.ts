@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { sanitizeIlikeInput } from './formatters';
-import type { EventFilter, PaginatedResult, FilterOptions, DashboardData } from './types';
+import type { EventFilter, PaginatedResult, FilterOptions, DashboardData, QualificacaoDetalhadaRow, QualificacaoDetalhadaFilters } from './types';
 import { logNormalizedError } from './supabaseErrors';
 
 // Limite máximo de registros para exportação
@@ -285,6 +285,66 @@ export async function fetchFilterOptions(tipo?: 'ATENDIMENTO_OPERACAO' | 'URA'):
     };
   } catch (err: any) {
     logNormalizedError('fetchFilterOptions', err);
+    throw err;
+  }
+}
+
+/**
+ * Consulta dados consolidados de qualificação por campanha.
+ * Chama a RPC get_qualificacao_detalhada_atendimento (migration 013).
+ * Retorna linhas agrupadas por campanha + qualificação, com métricas de TMA.
+ *
+ * ATENÇÃO: Esta função é aditiva e NÃO altera fetchEvents, fetchDashboardStats
+ *          nem fetchFilterOptions.
+ */
+export async function fetchQualificacaoDetalhada(
+  filters: QualificacaoDetalhadaFilters
+): Promise<QualificacaoDetalhadaRow[]> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('[DataProvider] Supabase não está configurado. Verifique as credenciais no .env.');
+  }
+
+  try {
+    // Monta data_inicio e data_fim como timestamps ISO válidos
+    const dataInicio = filters.startDate
+      ? `${filters.startDate}T00:00:00`
+      : (() => { throw new Error('Data inicial é obrigatória.'); })();
+
+    const dataFim = filters.endDate
+      ? `${filters.endDate}T23:59:59`
+      : (() => { throw new Error('Data final é obrigatória.'); })();
+
+    const params: Record<string, any> = {
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      campanha_filter: filters.campanha || null,
+      resultado_filter: filters.resultado ? sanitizeIlikeInput(filters.resultado) : null,
+      fonte_filter: null,
+      status_filter: null,
+    };
+
+    const { data, error } = await supabase!.rpc(
+      'get_qualificacao_detalhada_atendimento',
+      params
+    );
+
+    if (error) throw error;
+
+    // Normaliza e tipa o retorno da RPC
+    return (data || []).map((r: any): QualificacaoDetalhadaRow => ({
+      campanha: r.campanha ?? '',
+      tipo: r.tipo ?? 'Inbound',
+      qualificacao: r.qualificacao ?? 'SEM QUALIFICAÇÃO',
+      chamadas: Number(r.chamadas ?? 0),
+      tma_soma_segundos: Number(r.tma_soma_segundos ?? 0),
+      tma_media_segundos: Number(r.tma_media_segundos ?? 0),
+      pos_atendimento_soma_segundos: Number(r.pos_atendimento_soma_segundos ?? 0),
+      pos_atendimento_media_segundos: Number(r.pos_atendimento_media_segundos ?? 0),
+      periodo_inicio: r.periodo_inicio ?? dataInicio,
+      periodo_fim: r.periodo_fim ?? dataFim,
+    }));
+  } catch (err: any) {
+    logNormalizedError('fetchQualificacaoDetalhada', err);
     throw err;
   }
 }

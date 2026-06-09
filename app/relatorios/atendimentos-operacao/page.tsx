@@ -8,7 +8,7 @@ import Pagination from '@/components/Pagination';
 import SourceBadge from '@/components/SourceBadge';
 import StatusBadge from '@/components/StatusBadge';
 import StatCard from '@/components/StatCard';
-import { fetchEvents, fetchFilterOptions } from '@/lib/dataProvider';
+import { fetchEvents, fetchFilterOptions, fetchEventsForExport } from '@/lib/dataProvider';
 import { formatSeconds, formatDateTime } from '@/lib/formatters';
 import { exportToCsv } from '@/lib/exportCsv';
 import { exportToXlsx } from '@/lib/exportXlsx';
@@ -152,10 +152,8 @@ export default function AtendimentosOperacaoPage() {
   // Funções de Exportação
   const getExportData = async () => {
     // Consulta TODOS os registros correspondentes aos filtros atuais (sem limitação de página)
-    const res = await fetchEvents({
+    const data = await fetchEventsForExport({
       tipo_relatorio: 'ATENDIMENTO_OPERACAO',
-      page: 1,
-      pageSize: 50000, // Limite estendido para pegar toda a base filtrada
       ...filters
     });
     
@@ -171,7 +169,7 @@ export default function AtendimentosOperacaoPage() {
       'Resultado do usuário'
     ];
 
-    const rows = res.data.map(e => [
+    const rows = data.map(e => [
       e.campanha,
       e.fila,
       e.usuario,
@@ -187,11 +185,21 @@ export default function AtendimentosOperacaoPage() {
   };
 
   const handleExportCsv = async () => {
+    const limit = parseInt(process.env.NEXT_PUBLIC_EXPORT_MAX_ROWS || '10000', 10);
+    if (total > limit) {
+      alert("O relatório possui mais registros do que o limite permitido para exportação. Refine os filtros ou reduza o período.");
+      return;
+    }
     const { headers, rows } = await getExportData();
     exportToCsv(headers, rows, 'cetesb-atendimentos-operacao.csv');
   };
 
   const handleExportXlsx = async () => {
+    const limit = parseInt(process.env.NEXT_PUBLIC_EXPORT_MAX_ROWS || '10000', 10);
+    if (total > limit) {
+      alert("O relatório possui mais registros do que o limite permitido para exportação. Refine os filtros ou reduza o período.");
+      return;
+    }
     const { headers, rows } = await getExportData();
     exportToXlsx(headers, rows, 'cetesb-atendimentos-operacao.xlsx');
   };

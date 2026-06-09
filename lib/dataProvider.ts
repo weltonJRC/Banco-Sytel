@@ -348,3 +348,140 @@ export async function fetchQualificacaoDetalhada(
     throw err;
   }
 }
+
+/**
+ * Consulta TODOS os registros para exportação de forma loteada (batches de 1.000)
+ * para evitar limites de PostgREST / Supabase API Gateway.
+ */
+export async function fetchEventsForExport(filters: EventFilter): Promise<any[]> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('[DataProvider] Supabase não está configurado. Verifique as credenciais no .env.');
+  }
+
+  try {
+    const isUra = filters.tipo_relatorio === 'URA';
+    const viewName = isUra ? 'vw_cetesb_ura_front' : 'vw_cetesb_atendimentos_operacao_front';
+    
+    // Usar o limite de exportação configurado
+    const limit = EXPORT_MAX_ROWS;
+    const batchSize = 1000;
+    let allData: any[] = [];
+    let hasMore = true;
+    let offset = 0;
+
+    while (hasMore && allData.length < limit) {
+      let query = supabase!
+        .from(viewName)
+        .select('*');
+
+      // Aplicar filtros dinâmicos
+      if (filters.startDate) {
+        query = query.gte('sessao_iniciada', `${filters.startDate}T00:00:00.000Z`);
+      }
+      if (filters.endDate) {
+        const dateParts = filters.endDate.split('-');
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[0], 10);
+          const month = parseInt(dateParts[1], 10);
+          const day = parseInt(dateParts[2], 10);
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+            const date = new Date(Date.UTC(year, month - 1, day));
+            date.setUTCDate(date.getUTCDate() + 1);
+            const nextDayStr = date.toISOString().split('T')[0];
+            query = query.lt('sessao_iniciada', `${nextDayStr}T00:00:00.000Z`);
+          } else {
+            query = query.lt('sessao_iniciada', `${filters.endDate}T23:59:59.999Z`);
+          }
+        } else {
+          query = query.lt('sessao_iniciada', `${filters.endDate}T23:59:59.999Z`);
+        }
+      }
+      if (filters.campanha) {
+        query = query.eq('campanha', filters.campanha);
+      }
+      if (filters.fila) {
+        query = query.eq('fila', filters.fila);
+      }
+      if (filters.usuario && !isUra) {
+        const safeUsuario = sanitizeIlikeInput(filters.usuario);
+        query = query.ilike('usuario', `%${safeUsuario}%`);
+      }
+      if (filters.resultado) {
+        const safeResultado = sanitizeIlikeInput(filters.resultado);
+        if (isUra) {
+          query = query.ilike('resultado_nome', `%${safeResultado}%`);
+        } else {
+          query = query.ilike('descricao_resultado', `%${safeResultado}%`);
+        }
+      }
+      if (filters.fonte) {
+        query = query.eq('fonte_oficial', filters.fonte);
+      }
+      if (filters.status) {
+        query = query.eq('status_validacao', filters.status);
+      }
+
+      // Range do lote atual
+      const startIdx = offset;
+      const remaining = limit - allData.length;
+      const currentBatchSize = Math.min(batchSize, remaining);
+      const endIdx = startIdx + currentBatchSize - 1;
+
+      query = query
+        .order('sessao_iniciada', { ascending: false })
+        .range(startIdx, endIdx);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const batchData = data || [];
+      if (batchData.length === 0) {
+        hasMore = false;
+      } else {
+        allData = allData.concat(batchData);
+        offset += batchData.length;
+        if (batchData.length < currentBatchSize) {
+          hasMore = false;
+        }
+      }
+    }
+
+    // Mapear normalizando o retorno
+    return allData.map((r: any) => {
+      if (isUra) {
+        return {
+          id: Math.random(),
+          campanha: r.campanha,
+          fila: r.fila,
+          numero_telefone: r.numero_telefone,
+          sessao_iniciada: r.sessao_iniciada,
+          duracao_fila_segundos: r.duracao_fila_segundos,
+          duracao_fala_segundos: r.duracao_fala_segundos,
+          resultado_name: r.resultado_nome,
+          descricao_resultado: r.descricao_resultado,
+          fonte_oficial: 'CETESB 2025 - URA/Atendimento',
+          status_validacao: 'VALIDADO'
+        };
+      } else {
+        return {
+          id: Math.random(),
+          campanha: r.campanha,
+          fila: r.fila,
+          usuario: r.usuario,
+          numero_telefone: r.numero_telefone,
+          sessao_iniciada: r.sessao_iniciada,
+          duracao_fila_segundos: r.duracao_fila_segundos,
+          duracao_fala_segundos: r.duracao_fala_segundos,
+          descricao_resultado: r.descricao_resultado,
+          resultado_usuario: r.resultado_usuario,
+          fonte_oficial: 'CETESB 2026 - Atendimento',
+          status_validacao: 'VALIDADO'
+        };
+      }
+    });
+
+  } catch (error: any) {
+    logNormalizedError('fetchEventsForExport', error);
+    throw error;
+  }
+}

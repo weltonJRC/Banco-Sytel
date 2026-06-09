@@ -19,7 +19,6 @@
     "import:dec-jan": "tsx scripts/import-dec-jan-complement.ts"
   },
   "dependencies": {
-    "@rolldown/binding-win32-x64-msvc": "^1.0.2",
     "@supabase/supabase-js": "^2.106.2",
     "dotenv": "^17.4.2",
     "lucide-react": "^1.16.0",

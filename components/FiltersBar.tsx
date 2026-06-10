@@ -25,6 +25,8 @@ interface FiltersBarProps {
   onClear: () => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
+  onExportFullCsv: () => void;
+  isExportingFull: boolean;
 }
 
 export default function FiltersBar({
@@ -35,7 +37,9 @@ export default function FiltersBar({
   onSearch,
   onClear,
   onExportCsv,
-  onExportXlsx
+  onExportXlsx,
+  onExportFullCsv,
+  isExportingFull
 }: FiltersBarProps) {
   const isUra = tipo_relatorio === 'URA';
 
@@ -176,6 +180,20 @@ export default function FiltersBar({
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
             Planilha Excel (.xlsx)
+          </button>
+
+          <button
+            onClick={onExportFullCsv}
+            disabled={isExportingFull}
+            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded border transition cursor-pointer ${
+              isExportingFull
+                ? 'bg-amber-100 text-amber-700 border-amber-200 cursor-not-allowed animate-pulse'
+                : 'text-amber-800 bg-amber-50 hover:bg-amber-100 border-amber-200'
+            }`}
+            title="Baixar relatório completo em formato CSV sem limite de 10 mil linhas"
+          >
+            <Download className={`w-3.5 h-3.5 ${isExportingFull ? 'text-amber-500' : 'text-amber-700'}`} />
+            {isExportingFull ? 'Gerando relatório completo...' : 'Baixar relatório completo CSV'}
           </button>
         </div>
 

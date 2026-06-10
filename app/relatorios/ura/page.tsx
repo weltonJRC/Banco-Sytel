@@ -36,6 +36,7 @@ export default function UraCetesbPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [isExportingFull, setIsExportingFull] = useState(false);
 
   const [filterOptions, setFilterOptions] = useState({
     campanhas: [] as string[],
@@ -184,6 +185,56 @@ export default function UraCetesbPage() {
     exportToXlsx(headers, rows, 'cetesb-relatorio-ura.xlsx');
   };
 
+  const handleExportFullCsv = async () => {
+    const confirmMessage = 'A exportação completa pode levar alguns minutos dependendo do período selecionado.';
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    
+    setIsExportingFull(true);
+    
+    const params = new URLSearchParams({
+      reportType: 'ura',
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      campanha: filters.campanha,
+      fila: filters.fila,
+      usuario: filters.usuario,
+      resultado: filters.resultado,
+      fonte: filters.fonte,
+      status: filters.status
+    });
+
+    try {
+      const validateParams = new URLSearchParams(params);
+      validateParams.set('validate', 'true');
+      const checkRes = await fetch(`/api/export-full?${validateParams.toString()}`);
+      
+      if (!checkRes.ok) {
+        throw new Error('Erro na validação prévia');
+      }
+
+      const downloadUrl = `/api/export-full?${params.toString()}`;
+      
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = downloadUrl;
+      document.body.appendChild(iframe);
+      
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+        setIsExportingFull(false);
+      }, 5000);
+
+    } catch (err) {
+      console.error('[Exportação Completa URA] Falha:', err);
+      alert('Não foi possível gerar o relatório completo. Tente novamente ou reduza o período.');
+      setIsExportingFull(false);
+    }
+  };
+
   const totalNavegacaoSegundos = data.reduce((acc, curr) => acc + (curr.duracao_fala_segundos || 0), 0);
   const avgNavegacaoSegundos = data.length > 0
     ? Math.round(totalNavegacaoSegundos / data.length)
@@ -246,6 +297,8 @@ export default function UraCetesbPage() {
           onClear={handleClear}
           onExportCsv={handleExportCsv}
           onExportXlsx={handleExportXlsx}
+          onExportFullCsv={handleExportFullCsv}
+          isExportingFull={isExportingFull}
         />
 
         {/* Tabela de Dados Grande */}

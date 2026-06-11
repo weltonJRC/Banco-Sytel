@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getSessionFromCookie } from '../../../lib/auth.server';
 import { requireSupabaseServer } from '../../../lib/supabaseServer';
 import { sanitizeIlikeInput, formatDateTime, formatSeconds } from '../../../lib/formatters';
@@ -38,9 +38,9 @@ export async function GET(request: NextRequest) {
     const cookieHeader = request.headers.get('cookie');
     const session = getSessionFromCookie(cookieHeader);
     if (!session) {
-      return NextResponse.json(
-        { error: 'Não autorizado. Sessão expirada ou inválida.' },
-        { status: 401 }
+      return new Response(
+        JSON.stringify({ error: 'Não autorizado. Sessão expirada ou inválida.' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -59,15 +59,18 @@ export async function GET(request: NextRequest) {
 
     // Validação básica de parâmetros
     if (!reportType || (reportType !== 'atendimentos' && reportType !== 'ura')) {
-      return NextResponse.json(
-        { error: 'Parâmetro reportType inválido ou ausente.' },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: 'Parâmetro reportType inválido ou ausente.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     // Se for apenas uma validação prévia de sessão e parâmetros
     if (validateOnly) {
-      return NextResponse.json({ ok: true });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // 3. Inicializar o Supabase Server
@@ -145,74 +148,95 @@ export async function GET(request: NextRequest) {
           'Resultado do usuário'
         ];
 
-    // Monta o cabeçalho do CSV
-    const csvLines: string[] = [headers.map(escapeCsvCell).join(';')];
-
-    // 7. Loop de busca em lotes de 1.000 registros sem limite de 10.000
-    let page = 0;
-    const batchSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const from = page * batchSize;
-      const to = from + batchSize - 1;
-
-      const { data, error } = (await query.range(from, to)) as { data: any[] | null; error: any };
-
-      if (error) {
-        console.error(`[API Export] Erro no lote ${page}:`, error);
-        throw error;
-      }
-
-      if (!data || data.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      // Adiciona registros formatados
-      for (const row of data) {
-        const line = isUra
-          ? [
-              row.campanha,
-              row.fila,
-              row.numero_telefone,
-              formatDateTime(row.sessao_iniciada),
-              formatSeconds(row.duracao_fila_segundos),
-              formatSeconds(row.duracao_fala_segundos),
-              row.resultado_nome || '-',
-              row.descricao_resultado
-            ]
-          : [
-              row.campanha,
-              row.fila,
-              row.usuario,
-              row.numero_telefone,
-              formatDateTime(row.sessao_iniciada),
-              formatSeconds(row.duracao_fila_segundos),
-              formatSeconds(row.duracao_fala_segundos),
-              row.descricao_resultado,
-              row.resultado_usuario
-            ];
-        csvLines.push(line.map(escapeCsvCell).join(';'));
-      }
-
-      page++;
-
-      if (data.length < batchSize) {
-        hasMore = false;
-      }
-    }
-
-    const csvContent = csvLines.join('\r\n');
-    
     // Nome do arquivo
     const displayStart = startDate || 'inicio';
     const displayEnd = endDate || 'fim';
     const filename = `cetesb-${reportType}-completo-${displayStart}-a-${displayEnd}.csv`;
 
-    // Retornar o arquivo com os cabeçalhos apropriados
-    // \uFEFF força o Excel a interpretar o arquivo em UTF-8 com acentos corretos (BOM)
-    return new NextResponse('\uFEFF' + csvContent, {
+    console.log(`[API Export] Iniciando exportação por streaming: tipo=${reportType}, período=${displayStart} a ${displayEnd}`);
+
+    // Encoder de texto
+    const encoder = new TextEncoder();
+
+    // Criar o stream responsivo
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Escreve o BOM UTF-8 (\uFEFF) para garantir leitura de acentos no Excel
+          controller.enqueue(encoder.encode('\uFEFF'));
+
+          // Escreve a linha de cabeçalho (sem quebra de linha no final para ser precedida por \r\n nos registros)
+          const headerLine = headers.map(escapeCsvCell).join(';');
+          controller.enqueue(encoder.encode(headerLine));
+
+          let page = 0;
+          const batchSize = 1000;
+          let hasMore = true;
+
+          while (hasMore) {
+            const from = page * batchSize;
+            const to = from + batchSize - 1;
+
+            const { data, error } = (await query.range(from, to)) as { data: any[] | null; error: any };
+
+            if (error) {
+              console.error(`[API Export] Erro no lote ${page}:`, error.message || error);
+              throw error;
+            }
+
+            if (!data || data.length === 0) {
+              hasMore = false;
+              break;
+            }
+
+            console.log(`[API Export] Lote ${page} carregado: registros=${data.length}, total_acumulado=${from + data.length}`);
+
+            let chunkCsv = '';
+            for (const row of data) {
+              const line = isUra
+                ? [
+                    row.campanha,
+                    row.fila,
+                    row.numero_telefone,
+                    formatDateTime(row.sessao_iniciada),
+                    formatSeconds(row.duracao_fila_segundos),
+                    formatSeconds(row.duracao_fala_segundos),
+                    row.resultado_nome || '-',
+                    row.descricao_resultado
+                  ]
+                : [
+                    row.campanha,
+                    row.fila,
+                    row.usuario,
+                    row.numero_telefone,
+                    formatDateTime(row.sessao_iniciada),
+                    formatSeconds(row.duracao_fila_segundos),
+                    formatSeconds(row.duracao_fala_segundos),
+                    row.descricao_resultado,
+                    row.resultado_usuario
+                  ];
+              chunkCsv += '\r\n' + line.map(escapeCsvCell).join(';');
+            }
+
+            controller.enqueue(encoder.encode(chunkCsv));
+
+            page++;
+
+            if (data.length < batchSize) {
+              hasMore = false;
+            }
+          }
+
+          console.log(`[API Export] Exportação finalizada com sucesso. Páginas processadas=${page}`);
+          controller.close();
+        } catch (err: any) {
+          console.error('[API Export] Erro durante streaming de dados:', err.message || err);
+          controller.error(err);
+        }
+      }
+    });
+
+    return new Response(stream, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
@@ -222,10 +246,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (err: any) {
-    console.error('[API Export] Erro inesperado na exportação completa:', err);
-    return NextResponse.json(
-      { error: 'Não foi possível gerar o relatório completo. Tente novamente ou reduza o período.' },
-      { status: 500 }
+    console.error('[API Export] Erro inesperado na exportação completa:', err.message || err);
+    return new Response(
+      JSON.stringify({ error: 'Não foi possível gerar o relatório completo. Tente novamente ou reduza o período.' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }

@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { sanitizeIlikeInput } from './formatters';
-import type { EventFilter, PaginatedResult, FilterOptions, DashboardData, QualificacaoDetalhadaRow, QualificacaoDetalhadaFilters } from './types';
+import type { EventFilter, PaginatedResult, FilterOptions, DashboardData, QualificacaoDetalhadaRow, QualificacaoDetalhadaFilters, ChamadasPorHoraFilters, ChamadasPorHoraRow } from './types';
 import { logNormalizedError } from './supabaseErrors';
 
 // Limite máximo de registros para exportação
@@ -485,3 +485,60 @@ export async function fetchEventsForExport(filters: EventFilter): Promise<any[]>
     throw error;
   }
 }
+
+/**
+ * Consulta dados consolidados de chamadas por hora por data, campanha e fila.
+ * Chama a RPC get_chamadas_por_hora.
+ */
+export async function fetchChamadasPorHora(
+  filters: ChamadasPorHoraFilters
+): Promise<ChamadasPorHoraRow[]> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('[DataProvider] Supabase não está configurado. Verifique as credenciais no .env.');
+  }
+
+  try {
+    const dataInicio = filters.startDate
+      ? `${filters.startDate}T00:00:00`
+      : (() => { throw new Error('Data inicial é obrigatória.'); })();
+
+    const dataFim = filters.endDate
+      ? `${filters.endDate}T23:59:59`
+      : (() => { throw new Error('Data final é obrigatória.'); })();
+
+    const params: Record<string, any> = {
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      campanha_filter: filters.campanha || null,
+      fila_filter: filters.fila || null,
+      fonte_filter: filters.fonte || null,
+      status_filter: filters.status || null,
+    };
+
+    const { data, error } = await supabase!.rpc(
+      'get_chamadas_por_hora',
+      params
+    );
+
+    if (error) throw error;
+
+    return (data || []).map((r: any): ChamadasPorHoraRow => ({
+      data: r.data ?? '',
+      campanha: r.campanha ?? '',
+      midia: r.midia ?? 'Voice',
+      fila: r.fila ?? '',
+      hora: Number(r.hora ?? 0),
+      total: Number(r.total ?? 0),
+      enfileiradas: Number(r.enfileiradas ?? 0),
+      em_fila: Number(r.em_fila ?? 0),
+      conectadas_agente: Number(r.conectadas_agente ?? 0),
+      abandonadas: Number(r.abandonadas ?? 0),
+      expiradas_na_fila: Number(r.expiradas_na_fila ?? 0),
+      derrubadas: Number(r.derrubadas ?? 0),
+    }));
+  } catch (err: any) {
+    logNormalizedError('fetchChamadasPorHora', err);
+    throw err;
+  }
+}
+

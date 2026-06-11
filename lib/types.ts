@@ -177,3 +177,53 @@ export interface QualificacaoDetalhadaFilters {
   campanha: string;
   resultado: string;
 }
+
+// ─── Chamadas Por Hora ────────────────────────────────────────
+
+/**
+ * Linha retornada pela RPC get_chamadas_por_hora.
+ */
+export interface ChamadasPorHoraRow {
+  data: string;
+  campanha: string;
+  midia: string;
+  fila: string;
+  hora: number;
+  total: number;
+  enfileiradas: number;
+  em_fila: number;
+  conectadas_agente: number;
+  abandonadas: number;
+  expiradas_na_fila: number;
+  derrubadas: number;
+}
+
+/**
+ * Filtros da tela de Chamadas Por Hora.
+ */
+export interface ChamadasPorHoraFilters {
+  startDate: string;
+  endDate: string;
+  campanha?: string;
+  fila?: string;
+  fonte?: string;
+  status?: string;
+}
+
+/**
+ * Grupo de chamadas por hora para renderização.
+ */
+export interface ChamadasPorHoraGroup {
+  data: string;
+  campanha: string;
+  midia: string;
+  periodo: string;
+  fila: string;
+  rows: ChamadasPorHoraRow[];
+  totalChamadas: number;
+  totalConectadas: number;
+  totalAbandonadas: number;
+  totalExpiradas: number;
+  totalDerrubadas: number;
+}
+

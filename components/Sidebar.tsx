@@ -11,7 +11,8 @@ import {
   Users, 
   LogOut,
   Layers,
-  ClipboardList
+  ClipboardList,
+  Clock
 } from 'lucide-react';
 import { getCurrentUser, signOut } from '../lib/auth';
 
@@ -48,6 +49,12 @@ export default function Sidebar() {
       label: 'Qualificação Detalhada',
       path: '/relatorios/qualificacao-detalhada',
       icon: <ClipboardList className="w-5 h-5" />,
+      roles: ['jrc_admin', 'jrc_operacao', 'jrc_auditoria', 'cetesb_consulta', 'cetesb_gestao']
+    },
+    {
+      label: 'Chamadas Por Hora',
+      path: '/relatorios/chamadas-por-hora',
+      icon: <Clock className="w-5 h-5" />,
       roles: ['jrc_admin', 'jrc_operacao', 'jrc_auditoria', 'cetesb_consulta', 'cetesb_gestao']
     },
     {

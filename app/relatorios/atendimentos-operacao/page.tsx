@@ -5,14 +5,10 @@ import AppLayout from '@/components/AppLayout';
 import FiltersBar from '@/components/FiltersBar';
 import DataTable from '@/components/DataTable';
 import Pagination from '@/components/Pagination';
-import SourceBadge from '@/components/SourceBadge';
-import StatusBadge from '@/components/StatusBadge';
 import StatCard from '@/components/StatCard';
-import { fetchEvents, fetchFilterOptions, fetchEventsForExport } from '@/lib/dataProvider';
+import { fetchEvents, fetchFilterOptions } from '@/lib/dataProvider';
 import { formatSeconds, formatDateTime } from '@/lib/formatters';
-import { exportToCsv } from '@/lib/exportCsv';
-import { exportToXlsx } from '@/lib/exportXlsx';
-import { PhoneCall, Clock, MessageSquare, Database } from 'lucide-react';
+import { PhoneCall, Clock, Database } from 'lucide-react';
 
 interface EventRow {
   id: number;
@@ -38,7 +34,7 @@ export default function AtendimentosOperacaoPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [isExportingFull, setIsExportingFull] = useState(false);
-  
+
   // Opções para Selects de Filtros
   const [filterOptions, setFilterOptions] = useState({
     campanhas: [] as string[],
@@ -109,7 +105,7 @@ export default function AtendimentosOperacaoPage() {
   };
 
   const handleSearch = () => {
-    setPage(1); // Reinicia para a primeira página
+    setPage(1);
     loadData(1, pageSize);
   };
 
@@ -126,8 +122,7 @@ export default function AtendimentosOperacaoPage() {
     };
     setFilters(cleared);
     setPage(1);
-    
-    // Executa a busca com os campos limpos imediatamente
+
     setLoading(true);
     setError(null);
     fetchEvents({
@@ -150,69 +145,10 @@ export default function AtendimentosOperacaoPage() {
     });
   };
 
-  // Funções de Exportação
-  const getExportData = async () => {
-    // Consulta TODOS os registros correspondentes aos filtros atuais (sem limitação de página)
-    const data = await fetchEventsForExport({
-      tipo_relatorio: 'ATENDIMENTO_OPERACAO',
-      ...filters
-    });
-    
-    const headers = [
-      'Campanha',
-      'Fila',
-      'Usuário',
-      'Número de telefone',
-      'Sessão iniciada - Evento',
-      'Duração da fila - Total',
-      'Duração da fala - Total',
-      'Descrição do resultado do usuário',
-      'Resultado do usuário'
-    ];
-
-    const rows = data.map(e => [
-      e.campanha,
-      e.fila,
-      e.usuario,
-      e.numero_telefone,
-      formatDateTime(e.sessao_iniciada),
-      formatSeconds(e.duracao_fila_segundos),
-      formatSeconds(e.duracao_fala_segundos),
-      e.descricao_resultado,
-      e.resultado_usuario
-    ]);
-
-    return { headers, rows };
-  };
-
-  const handleExportCsv = async () => {
-    const limit = parseInt(process.env.NEXT_PUBLIC_EXPORT_MAX_ROWS || '10000', 10);
-    if (total > limit) {
-      alert("O relatório possui mais registros do que o limite permitido para exportação. Refine os filtros ou reduza o período.");
-      return;
-    }
-    const { headers, rows } = await getExportData();
-    exportToCsv(headers, rows, 'cetesb-atendimentos-operacao.csv');
-  };
-
-  const handleExportXlsx = async () => {
-    const limit = parseInt(process.env.NEXT_PUBLIC_EXPORT_MAX_ROWS || '10000', 10);
-    if (total > limit) {
-      alert("O relatório possui mais registros do que o limite permitido para exportação. Refine os filtros ou reduza o período.");
-      return;
-    }
-    const { headers, rows } = await getExportData();
-    exportToXlsx(headers, rows, 'cetesb-atendimentos-operacao.xlsx');
-  };
-
+  // Exportação completa via streaming server-side (único método oficial)
   const handleExportFullCsv = async () => {
-    const confirmMessage = 'A exportação completa pode levar alguns minutos dependendo do período selecionado.';
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-    
     setIsExportingFull(true);
-    
+
     const params = new URLSearchParams({
       reportType: 'atendimentos',
       startDate: filters.startDate,
@@ -226,30 +162,32 @@ export default function AtendimentosOperacaoPage() {
     });
 
     try {
+      // Pré-validação de sessão antes de iniciar o download
       const validateParams = new URLSearchParams(params);
       validateParams.set('validate', 'true');
       const checkRes = await fetch(`/api/export-full?${validateParams.toString()}`);
-      
+
       if (!checkRes.ok) {
         throw new Error('Erro na validação prévia');
       }
 
       const downloadUrl = `/api/export-full?${params.toString()}`;
-      
+
+      // Usa iframe invisível para não bloquear a navegação durante o download
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
       iframe.src = downloadUrl;
       document.body.appendChild(iframe);
-      
+
       setTimeout(() => {
         if (document.body.contains(iframe)) {
           document.body.removeChild(iframe);
         }
         setIsExportingFull(false);
-      }, 5000);
+      }, 8000);
 
     } catch (err) {
-      console.error('[Exportação Completa] Falha:', err);
+      console.error('[Atendimentos] Falha na exportação CSV completo.');
       alert('Não foi possível gerar o relatório completo. Tente novamente ou reduza o período.');
       setIsExportingFull(false);
     }
@@ -262,7 +200,7 @@ export default function AtendimentosOperacaoPage() {
 
   const totalTalkTime = data.reduce((acc, curr) => acc + (curr.duracao_fala_segundos || 0), 0);
 
-  const headers = [
+  const tableHeaders = [
     'Campanha',
     'Fila',
     'Usuário',
@@ -277,8 +215,8 @@ export default function AtendimentosOperacaoPage() {
   return (
     <AppLayout title="Relatórios: Atendimentos Operação">
       <div className="space-y-6">
-        
-        {/* Topo com Título no Estilo Sytel */}
+
+        {/* Topo com Título */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-800 tracking-tight uppercase">
@@ -312,7 +250,7 @@ export default function AtendimentosOperacaoPage() {
           />
         </div>
 
-        {/* Painel de Filtros Superiores */}
+        {/* Painel de Filtros */}
         <FiltersBar
           tipo_relatorio="ATENDIMENTO_OPERACAO"
           filters={filters}
@@ -320,13 +258,11 @@ export default function AtendimentosOperacaoPage() {
           onFilterChange={handleFilterChange}
           onSearch={handleSearch}
           onClear={handleClear}
-          onExportCsv={handleExportCsv}
-          onExportXlsx={handleExportXlsx}
           onExportFullCsv={handleExportFullCsv}
           isExportingFull={isExportingFull}
         />
 
-        {/* Tabela de Dados Grande */}
+        {/* Tabela de Dados */}
         {error ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center bg-red-50 rounded-lg border border-red-200 shadow-sm">
             <div className="p-4 bg-red-100 text-red-500 border border-red-200 rounded-full flex items-center justify-center">
@@ -339,7 +275,7 @@ export default function AtendimentosOperacaoPage() {
           </div>
         ) : (
           <DataTable
-            headers={headers}
+            headers={tableHeaders}
             loading={loading}
             totalRecords={total}
           >

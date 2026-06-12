@@ -6,7 +6,6 @@ import StatCard from '@/components/StatCard';
 import { fetchChamadasPorHora, fetchFilterOptions } from '@/lib/dataProvider';
 import { formatSeconds, formatDateTime } from '@/lib/formatters';
 import { exportToCsv } from '@/lib/exportCsv';
-import { exportToXlsx } from '@/lib/exportXlsx';
 import type { ChamadasPorHoraRow, ChamadasPorHoraGroup } from '@/lib/types';
 import {
   Clock,
@@ -15,7 +14,6 @@ import {
   Search,
   RotateCcw,
   Download,
-  FileSpreadsheet,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
@@ -278,14 +276,11 @@ export default function ChamadasPorHoraPage() {
     return { headers, rows };
   };
 
+  // Único método de exportação: CSV completo com campos protegidos
   const handleExportCsv = () => {
     const { headers, rows } = buildExportPayload();
-    exportToCsv(headers, rows, 'cetesb-chamadas-por-hora.csv');
-  };
-
-  const handleExportXlsx = () => {
-    const { headers, rows } = buildExportPayload();
-    exportToXlsx(headers, rows, 'cetesb-chamadas-por-hora.xlsx');
+    // Coluna 0 = Data — protegida com ="valor" para não virar formato de data do Excel
+    exportToCsv(headers, rows, 'cetesb-chamadas-por-hora.csv', [0]);
   };
 
   return (
@@ -437,21 +432,11 @@ export default function ChamadasPorHoraPage() {
                 id="cph-export-csv"
                 onClick={handleExportCsv}
                 disabled={grupos.length === 0}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Exportar dados filtrados para formato CSV"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                title="Baixar CSV completo — todos os registros do filtro/período selecionado"
               >
-                <Download className="w-3.5 h-3.5 text-slate-500" />
-                CSV
-              </button>
-              <button
-                id="cph-export-xlsx"
-                onClick={handleExportXlsx}
-                disabled={grupos.length === 0}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Exportar dados filtrados para planilha Excel"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                Planilha Excel (.xlsx)
+                <Download className="w-3.5 h-3.5 text-white" />
+                Baixar CSV completo
               </button>
             </div>
 

@@ -5,14 +5,10 @@ import AppLayout from '@/components/AppLayout';
 import FiltersBar from '@/components/FiltersBar';
 import DataTable from '@/components/DataTable';
 import Pagination from '@/components/Pagination';
-import SourceBadge from '@/components/SourceBadge';
-import StatusBadge from '@/components/StatusBadge';
 import StatCard from '@/components/StatCard';
 import { fetchEvents, fetchFilterOptions } from '@/lib/dataProvider';
 import { formatSeconds, formatDateTime } from '@/lib/formatters';
-import { exportToCsv } from '@/lib/exportCsv';
-import { exportToXlsx } from '@/lib/exportXlsx';
-import { Cpu, Clock, Calendar, Database } from 'lucide-react';
+import { Cpu, Clock, Database } from 'lucide-react';
 
 interface UraRow {
   id: number;
@@ -22,7 +18,7 @@ interface UraRow {
   sessao_iniciada: string;
   duracao_fila_segundos: number;
   duracao_fala_segundos: number;
-  resultado_nome: string;
+  resultado_name: string;
   descricao_resultado: string;
   fonte_oficial: string;
   status_validacao: string;
@@ -51,7 +47,7 @@ export default function UraCetesbPage() {
     endDate: '',
     campanha: '',
     fila: '',
-    usuario: '', // Fica vazio e oculto no URA
+    usuario: '',
     resultado: '',
     fonte: '',
     status: ''
@@ -142,57 +138,10 @@ export default function UraCetesbPage() {
     });
   };
 
-  const getExportData = async () => {
-    const res = await fetchEvents({
-      tipo_relatorio: 'URA',
-      page: 1,
-      pageSize: 50000,
-      ...filters
-    });
-
-    const headers = [
-      'Campanha',
-      'Fila',
-      'Número de telefone',
-      'Sessão iniciada - Evento',
-      'Duração da fila - Total',
-      'Duração da fala - Total',
-      'Resultado',
-      'Descrição do resultado do usuário'
-    ];
-
-    const rows = res.data.map(e => [
-      e.campanha,
-      e.fila,
-      e.numero_telefone,
-      formatDateTime(e.sessao_iniciada),
-      formatSeconds(e.duracao_fila_segundos),
-      formatSeconds(e.duracao_fala_segundos),
-      e.resultado_nome,
-      e.descricao_resultado
-    ]);
-
-    return { headers, rows };
-  };
-
-  const handleExportCsv = async () => {
-    const { headers, rows } = await getExportData();
-    exportToCsv(headers, rows, 'cetesb-relatorio-ura.csv');
-  };
-
-  const handleExportXlsx = async () => {
-    const { headers, rows } = await getExportData();
-    exportToXlsx(headers, rows, 'cetesb-relatorio-ura.xlsx');
-  };
-
+  // Exportação completa via streaming server-side (único método oficial)
   const handleExportFullCsv = async () => {
-    const confirmMessage = 'A exportação completa pode levar alguns minutos dependendo do período selecionado.';
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-    
     setIsExportingFull(true);
-    
+
     const params = new URLSearchParams({
       reportType: 'ura',
       startDate: filters.startDate,
@@ -209,27 +158,27 @@ export default function UraCetesbPage() {
       const validateParams = new URLSearchParams(params);
       validateParams.set('validate', 'true');
       const checkRes = await fetch(`/api/export-full?${validateParams.toString()}`);
-      
+
       if (!checkRes.ok) {
         throw new Error('Erro na validação prévia');
       }
 
       const downloadUrl = `/api/export-full?${params.toString()}`;
-      
+
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
       iframe.src = downloadUrl;
       document.body.appendChild(iframe);
-      
+
       setTimeout(() => {
         if (document.body.contains(iframe)) {
           document.body.removeChild(iframe);
         }
         setIsExportingFull(false);
-      }, 5000);
+      }, 8000);
 
     } catch (err) {
-      console.error('[Exportação Completa URA] Falha:', err);
+      console.error('[URA] Falha na exportação CSV completo.');
       alert('Não foi possível gerar o relatório completo. Tente novamente ou reduza o período.');
       setIsExportingFull(false);
     }
@@ -240,7 +189,7 @@ export default function UraCetesbPage() {
     ? Math.round(totalNavegacaoSegundos / data.length)
     : 0;
 
-  const headers = [
+  const tableHeaders = [
     'Campanha',
     'Fila',
     'Número de telefone',
@@ -254,7 +203,7 @@ export default function UraCetesbPage() {
   return (
     <AppLayout title="Relatórios: URA CETESB">
       <div className="space-y-6">
-        
+
         {/* Topo com Título */}
         <div>
           <h1 className="text-xl font-bold text-slate-800 tracking-tight uppercase">
@@ -287,7 +236,7 @@ export default function UraCetesbPage() {
           />
         </div>
 
-        {/* Filtros Superiores */}
+        {/* Filtros */}
         <FiltersBar
           tipo_relatorio="URA"
           filters={filters}
@@ -295,13 +244,11 @@ export default function UraCetesbPage() {
           onFilterChange={handleFilterChange}
           onSearch={handleSearch}
           onClear={handleClear}
-          onExportCsv={handleExportCsv}
-          onExportXlsx={handleExportXlsx}
           onExportFullCsv={handleExportFullCsv}
           isExportingFull={isExportingFull}
         />
 
-        {/* Tabela de Dados Grande */}
+        {/* Tabela de Dados */}
         {error ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center bg-red-50 rounded-lg border border-red-200 shadow-sm">
             <div className="p-4 bg-red-100 text-red-500 border border-red-200 rounded-full flex items-center justify-center">
@@ -314,7 +261,7 @@ export default function UraCetesbPage() {
           </div>
         ) : (
           <DataTable
-            headers={headers}
+            headers={tableHeaders}
             loading={loading}
             totalRecords={total}
           >
@@ -326,7 +273,7 @@ export default function UraCetesbPage() {
                 <td className="px-4 py-3.5 text-slate-500 font-medium">{formatDateTime(row.sessao_iniciada)}</td>
                 <td className="px-4 py-3.5 font-mono text-slate-500">{formatSeconds(row.duracao_fila_segundos)}</td>
                 <td className="px-4 py-3.5 font-mono text-slate-800 font-bold">{formatSeconds(row.duracao_fala_segundos)}</td>
-                <td className="px-4 py-3.5 font-semibold text-slate-700">{row.resultado_nome || '-'}</td>
+                <td className="px-4 py-3.5 font-semibold text-slate-700">{row.resultado_name || '-'}</td>
                 <td className="px-4 py-3.5 text-slate-600 max-w-[200px] truncate" title={row.descricao_resultado}>
                   {row.descricao_resultado}
                 </td>

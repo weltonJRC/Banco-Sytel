@@ -36,24 +36,26 @@ export function maskPhoneNumber(phone: string): string {
 }
 
 /**
- * Converte segundos inteiros para string no formato mm:ss ou hh:mm:ss.
- * Exemplo: 10 -> "00:10"
- * Exemplo: 151 -> "02:31"
- * Exemplo: 3665 -> "01:01:05"
+ * Converte segundos inteiros para string no formato HH:MM:SS.
+ * Exemplo: 10    -> "00:00:10"
+ * Exemplo: 151   -> "00:02:31"
+ * Exemplo: 2419  -> "00:40:19"
+ * Exemplo: 3665  -> "01:01:05"
+ *
+ * Sempre retorna HH:MM:SS — garante interpretação correta no Excel e nas exportações.
+ * Sem esse prefixo "00:", o Excel interpreta "40:19" como 40 horas e 19 minutos.
  */
 export function formatSeconds(seconds: number | null | undefined): string {
-  if (seconds === null || seconds === undefined || isNaN(seconds)) return '00:00';
-  
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  
+  if (seconds === null || seconds === undefined || isNaN(seconds)) return '00:00:00';
+
+  const s = Math.max(0, Math.floor(Number(seconds)));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+
   const pad = (num: number) => num.toString().padStart(2, '0');
-  
-  if (hrs > 0) {
-    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
-  }
-  return `${pad(mins)}:${pad(secs)}`;
+
+  return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
 }
 
 /**

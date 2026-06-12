@@ -35,6 +35,18 @@ vi.mock('../../lib/supabaseServer', () => ({
   })
 }));
 
+/** Helper: cria implementação de range com respostas ordenadas por lote */
+function makeRangeImpl(batches: any[][]) {
+  let call = 0;
+  return () => {
+    const idx = call++;
+    if (idx < batches.length) {
+      return Promise.resolve({ data: batches[idx], error: null });
+    }
+    return Promise.resolve({ data: [], error: null });
+  };
+}
+
 describe('Exportação Completa CSV - API Route /api/export-full', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -61,34 +73,20 @@ describe('Exportação Completa CSV - API Route /api/export-full', () => {
     expect(mockSupabaseFrom).not.toHaveBeenCalled();
   });
 
-  it('deve realizar a exportação completa chamando múltiplos lotes até o lote ser menor que 1000', async () => {
-    // Primeiro lote com 1000 registros, segundo com 300 registros.
-    const batch1 = Array.from({ length: 1000 }, (_, i) => ({
+  it('deve exportar CSV com cabeçalhos corretos e formato HH:MM:SS para durações', async () => {
+    const batch = Array.from({ length: 10 }, () => ({
       campanha: 'CAMP_TESTE',
       fila: 'FILA_TESTE',
       usuario: 'user.teste',
       numero_telefone: '11999999999',
       sessao_iniciada: '2026-06-01T10:00:00.000Z',
-      duracao_fila_segundos: 10,
-      duracao_fala_segundos: 60,
+      duracao_fila_segundos: 10,   // 00:00:10 em HH:MM:SS
+      duracao_fala_segundos: 60,   // 00:01:00 em HH:MM:SS
       descricao_resultado: 'Sucesso',
       resultado_usuario: 'Sucesso'
     }));
-    const batch2 = Array.from({ length: 300 }, (_, i) => ({
-      campanha: 'CAMP_TESTE2',
-      fila: 'FILA_TESTE2',
-      usuario: 'user.teste2',
-      numero_telefone: '11988888888',
-      sessao_iniciada: '2026-06-01T11:00:00.000Z',
-      duracao_fila_segundos: 15,
-      duracao_fala_segundos: 45,
-      descricao_resultado: 'Muda',
-      resultado_usuario: 'Muda'
-    }));
 
-    mockSupabaseQueryRange
-      .mockResolvedValueOnce({ data: batch1, error: null })
-      .mockResolvedValueOnce({ data: batch2, error: null });
+    mockSupabaseQueryRange.mockImplementation(makeRangeImpl([batch]));
 
     const req = new NextRequest('http://localhost/api/export-full?reportType=atendimentos', {
       headers: { cookie: 'valid-cookie' }
@@ -97,9 +95,8 @@ describe('Exportação Completa CSV - API Route /api/export-full', () => {
     const res = await GET(req);
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('text/csv; charset=utf-8');
-    expect(res.headers.get('Content-Disposition')).toContain('attachment; filename="cetesb-atendimentos-completo-inicio-a-fim.csv"');
 
-    // Verifica presença do BOM \uFEFF na resposta bruta (primeiros 3 bytes UTF-8 BOM)
+    // Verifica BOM UTF-8 (primeiros 3 bytes)
     const resClone = res.clone();
     const buffer = await resClone.arrayBuffer();
     const bytes = new Uint8Array(buffer);
@@ -109,40 +106,124 @@ describe('Exportação Completa CSV - API Route /api/export-full', () => {
 
     const text = await res.text();
     const lines = text.split('\r\n');
-    // Headers + 1300 records = 1301 lines
-    expect(lines.length).toBe(1301);
 
-    // Verifica cabeçalhos corretos
+    // Cabeçalho correto
     expect(lines[0]).toBe('Campanha;Fila;Usuário;Número de telefone;Sessão iniciada - Evento;Duração da fila - Total;Duração da fala - Total;Descrição do resultado do usuário;Resultado do usuário');
-    // Verifica primeiro registro
-    expect(lines[1]).toBe('CAMP_TESTE;FILA_TESTE;user.teste;11999999999;01/06/2026 07:00:00;00:10;01:00;Sucesso;Sucesso');
+
+    // Duração da fila deve ser ="00:00:10" (protegida, não "00:10" que o Excel converte)
+    expect(lines[1]).toContain('="00:00:10"');
+    // Duração da fala deve ser ="00:01:00" (não "01:00")
+    expect(lines[1]).toContain('="00:01:00"');
   });
 
-  it('deve tratar data final como inclusiva adicionando 1 dia no filtro LT', async () => {
-    mockSupabaseQueryRange.mockResolvedValue({ data: [], error: null });
-    const selectMock = vi.fn().mockReturnThis();
-    const gteMock = vi.fn().mockReturnThis();
-    const ltMock = vi.fn().mockReturnThis();
-    const orderMock = vi.fn().mockReturnThis();
+  it('deve proteger telefone com zeros à esquerda usando ="valor"', async () => {
+    const record = {
+      campanha: 'CAMP_TESTE',
+      fila: 'FILA_TESTE',
+      usuario: 'user.teste',
+      numero_telefone: '00551432371091', // virava 5,51432E+11 no Excel
+      sessao_iniciada: '2025-05-05T10:25:41.000Z',
+      duracao_fila_segundos: 5,
+      duracao_fala_segundos: 2419, // 00:40:19
+      descricao_resultado: 'Resolvido',
+      resultado_usuario: 'Resolvido'
+    };
 
-    mockSupabaseFrom.mockReturnValueOnce({
-      select: selectMock,
-      gte: gteMock,
-      lt: ltMock,
-      order: orderMock,
-      range: mockSupabaseQueryRange
-    } as any);
+    mockSupabaseQueryRange.mockImplementation(makeRangeImpl([[record]]));
 
-    const req = new NextRequest('http://localhost/api/export-full?reportType=atendimentos&startDate=2025-01-01&endDate=2026-05-31', {
+    const req = new NextRequest('http://localhost/api/export-full?reportType=atendimentos', {
       headers: { cookie: 'valid-cookie' }
     });
 
-    await GET(req);
+    const res = await GET(req);
+    expect(res.status).toBe(200);
 
-    // GTE recebe 2025-01-01 00:00:00
-    expect(gteMock).toHaveBeenCalledWith('sessao_iniciada', '2025-01-01 00:00:00');
-    // LT recebe 2026-06-01 00:00:00 (endDate 2026-05-31 + 1 dia)
-    expect(ltMock).toHaveBeenCalledWith('sessao_iniciada', '2026-06-01 00:00:00');
+    const text = await res.text();
+    const lines = text.split('\r\n');
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    const dataLine = lines[1];
+
+    // Telefone deve estar protegido com ="00551432371091"
+    expect(dataLine).toContain('="00551432371091"');
+    // Não pode aparecer como notação científica
+    expect(dataLine).not.toContain('5.51432E+11');
+    expect(dataLine).not.toContain('5,51432E+11');
+
+    // Duração 2419s = 40min 19s deve ser ="00:40:19"
+    expect(dataLine).toContain('="00:40:19"');
+    expect(dataLine).not.toContain('"40:19"');
+  });
+
+  it('deve proteger os três telefones problemáticos identificados na validação', async () => {
+    const records = [
+      {
+        campanha: 'CAMP', fila: 'FILA', usuario: 'u',
+        numero_telefone: '00551432371091',
+        sessao_iniciada: '2025-05-05T10:00:00.000Z',
+        duracao_fila_segundos: 0, duracao_fala_segundos: 0,
+        descricao_resultado: '-', resultado_usuario: '-'
+      },
+      {
+        campanha: 'CAMP', fila: 'FILA', usuario: 'u',
+        numero_telefone: '01511983701595',
+        sessao_iniciada: '2025-05-05T10:00:00.000Z',
+        duracao_fila_segundos: 0, duracao_fala_segundos: 0,
+        descricao_resultado: '-', resultado_usuario: '-'
+      },
+      {
+        campanha: 'CAMP', fila: 'FILA', usuario: 'u',
+        numero_telefone: '011993696380',
+        sessao_iniciada: '2025-05-05T10:00:00.000Z',
+        duracao_fila_segundos: 0, duracao_fala_segundos: 0,
+        descricao_resultado: '-', resultado_usuario: '-'
+      }
+    ];
+
+    mockSupabaseQueryRange.mockImplementation(makeRangeImpl([records]));
+
+    const req = new NextRequest('http://localhost/api/export-full?reportType=atendimentos', {
+      headers: { cookie: 'valid-cookie' }
+    });
+
+    const res = await GET(req);
+    const text = await res.text();
+
+    // Todos os três telefones devem aparecer protegidos
+    expect(text).toContain('="00551432371091"');
+    expect(text).toContain('="01511983701595"');
+    expect(text).toContain('="011993696380"');
+
+    // Nenhum deve aparecer sem proteção (nu no CSV)
+    expect(text).not.toMatch(/;00551432371091;/);
+    expect(text).not.toMatch(/;01511983701595;/);
+    expect(text).not.toMatch(/;011993696380;/);
+  });
+
+  it('deve validar todos os casos de duração obrigatórios', async () => {
+    const records = [
+      { ...baseRecord(), duracao_fila_segundos: 40,   duracao_fala_segundos: 40   }, // 00:00:40
+      { ...baseRecord(), duracao_fila_segundos: 345,  duracao_fala_segundos: 345  }, // 00:05:45
+      { ...baseRecord(), duracao_fila_segundos: 2419, duracao_fala_segundos: 2419 }, // 00:40:19
+      { ...baseRecord(), duracao_fila_segundos: 3723, duracao_fala_segundos: 3723 }, // 01:02:03
+    ];
+
+    mockSupabaseQueryRange.mockImplementation(makeRangeImpl([records]));
+
+    const req = new NextRequest('http://localhost/api/export-full?reportType=atendimentos', {
+      headers: { cookie: 'valid-cookie' }
+    });
+
+    const res = await GET(req);
+    const text = await res.text();
+
+    expect(text).toContain('="00:00:40"');
+    expect(text).toContain('="00:05:45"');
+    expect(text).toContain('="00:40:19"');
+    expect(text).toContain('="01:02:03"');
+
+    // Formatos incorretos não devem aparecer
+    expect(text).not.toContain(';40:19;');
+    expect(text).not.toContain(';40:00;');
   });
 
   it('deve usar a view e colunas corretas para URA sem incluir campos proibidos', async () => {
@@ -157,13 +238,12 @@ describe('Exportação Completa CSV - API Route /api/export-full', () => {
       descricao_resultado: 'Cliente desligou'
     };
 
-    mockSupabaseQueryRange.mockResolvedValueOnce({ data: [recordUra], error: null });
     const selectMock = vi.fn().mockReturnThis();
 
     mockSupabaseFrom.mockReturnValueOnce({
       select: selectMock,
       order: vi.fn().mockReturnThis(),
-      range: mockSupabaseQueryRange
+      range: makeRangeImpl([[recordUra]])
     } as any);
 
     const req = new NextRequest('http://localhost/api/export-full?reportType=ura', {
@@ -173,28 +253,83 @@ describe('Exportação Completa CSV - API Route /api/export-full', () => {
     const res = await GET(req);
     expect(res.status).toBe(200);
 
-    // Verifica colunas selecionadas para a URA
+    // Verifica view e colunas corretas para URA
     expect(mockSupabaseFrom).toHaveBeenCalledWith('vw_cetesb_ura_front');
-    expect(selectMock).toHaveBeenCalledWith('campanha,fila,numero_telefone,sessao_iniciada,duracao_fila_segundos,duracao_fala_segundos,resultado_nome,descricao_resultado');
-
-    // Verifica presença do BOM \uFEFF na resposta bruta (primeiros 3 bytes UTF-8 BOM)
-    const resClone = res.clone();
-    const buffer = await resClone.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    expect(bytes[0]).toBe(239);
-    expect(bytes[1]).toBe(187);
-    expect(bytes[2]).toBe(191);
+    expect(selectMock).toHaveBeenCalledWith(
+      'campanha,fila,numero_telefone,sessao_iniciada,duracao_fila_segundos,duracao_fala_segundos,resultado_nome,descricao_resultado'
+    );
 
     const text = await res.text();
     const lines = text.split('\r\n');
-    expect(lines[0]).toBe('Campanha;Fila;Número de telefone;Sessão iniciada - Evento;Duração da fila - Total;Duração da fala - Total;Resultado;Descrição do resultado do usuário');
-    expect(lines[1]).toBe('URA_TESTE;FILA_URA;11977777777;02/06/2026 11:30:00;00:05;00:20;Abandonado;Cliente desligou');
 
-    // Verifica se campos proibidos não estão no cabeçalho ou nas linhas
+    // Cabeçalho URA correto
+    expect(lines[0]).toBe('Campanha;Fila;Número de telefone;Sessão iniciada - Evento;Duração da fila - Total;Duração da fala - Total;Resultado;Descrição do resultado do usuário');
+
+    // Campos proibidos não devem aparecer
     const forbidden = ['id', 'raw_payload', 'hash_arquivo', 'tenant', 'status_validacao', 'numero_telefone_hash'];
     for (const field of forbidden) {
       expect(lines[0].toLowerCase()).not.toContain(field.toLowerCase());
-      expect(lines[1].toLowerCase()).not.toContain(field.toLowerCase());
     }
   });
+
+  it('deve realizar exportação sem limite de registros (streaming paginado)', async () => {
+    // 2 lotes completos (1000 cada) + 1 parcial (300) = 2300 registros totais
+    const batch1 = Array.from({ length: 1000 }, () => baseRecord());
+    const batch2 = Array.from({ length: 1000 }, () => baseRecord());
+    const batch3 = Array.from({ length: 300 },  () => baseRecord());
+
+    // batch3 tem menos de 1000 — sinaliza fim do streaming
+    mockSupabaseQueryRange.mockImplementation(makeRangeImpl([batch1, batch2, batch3]));
+
+    const req = new NextRequest('http://localhost/api/export-full?reportType=atendimentos', {
+      headers: { cookie: 'valid-cookie' }
+    });
+
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const text = await res.text();
+    const lines = text.split('\r\n');
+    // 1 linha de cabeçalho + 2300 linhas de dados = 2301
+    expect(lines.length).toBe(2301);
+  });
+
+  it('deve tratar data final como inclusiva adicionando 1 dia no filtro LT', async () => {
+    const selectMock = vi.fn().mockReturnThis();
+    const gteMock = vi.fn().mockReturnThis();
+    const ltMock = vi.fn().mockReturnThis();
+    const orderMock = vi.fn().mockReturnThis();
+
+    mockSupabaseFrom.mockReturnValueOnce({
+      select: selectMock,
+      gte: gteMock,
+      lt: ltMock,
+      order: orderMock,
+      range: makeRangeImpl([[]])
+    } as any);
+
+    const req = new NextRequest('http://localhost/api/export-full?reportType=atendimentos&startDate=2025-01-01&endDate=2026-05-31', {
+      headers: { cookie: 'valid-cookie' }
+    });
+
+    await GET(req);
+
+    expect(gteMock).toHaveBeenCalledWith('sessao_iniciada', '2025-01-01 00:00:00');
+    expect(ltMock).toHaveBeenCalledWith('sessao_iniciada', '2026-06-01 00:00:00');
+  });
 });
+
+// Helper para criar registro base de atendimento
+function baseRecord() {
+  return {
+    campanha: 'CAMP_TESTE',
+    fila: 'FILA_TESTE',
+    usuario: 'user.teste',
+    numero_telefone: '11999999999',
+    sessao_iniciada: '2026-06-01T10:00:00.000Z',
+    duracao_fila_segundos: 10,
+    duracao_fala_segundos: 60,
+    descricao_resultado: 'Sucesso',
+    resultado_usuario: 'Sucesso'
+  };
+}

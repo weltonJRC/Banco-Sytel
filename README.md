@@ -47,7 +47,7 @@ O Portal foi desenhado sob medida para um único usuário corporativo de consult
 * **Usuário no Front-end**: `Cetesb`
 * **Mapeamento de E-mail Interno**: `cetesb@jrc.local` (configurado na variável `NEXT_PUBLIC_CETESB_LOGIN_EMAIL` no `.env`)
 * **Perfil do Usuário**: `cetesb_consulta`
-* **Senha inicial**: `Cetesb123` (criada manualmente no painel Supabase Auth)
+* **Senha inicial**: provisionada fora do Git e mantida em canal seguro; nunca documente credenciais reutilizáveis no repositório.
 
 ---
 
